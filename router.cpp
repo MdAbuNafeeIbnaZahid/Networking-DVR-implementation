@@ -53,6 +53,45 @@ string LLToStr(long long num )
     return ret;
 }
 
+vector<string> myStrTokenizer(string givenStr, vector<char> delimVec)
+{
+    long long a, b, c, d, e;
+    vector<string> ret;
+    string strToPush;
+    for ( a = 0; a < givenStr.size(); a++ )
+    {
+        if ( find( delimVec.begin(), delimVec.end(), givenStr[a] ) != delimVec.end() ) // delim found
+        {
+            if ( strToPush.size() )
+            {
+                ret.push_back( strToPush );
+            }
+            strToPush = "";
+        }
+        else
+        {
+            strToPush.push_back( givenStr[a] );
+        }
+    }
+    if ( strToPush.size() )
+    {
+        ret.push_back( strToPush );
+    }
+    return ret;
+}
+
+long long strToLL(string str)
+{
+    long long a, b, c, d, e, ret = 0;
+    cout << "in strToLL" << endl;
+    cout << "str = " << str << endl;
+    for (a = 0;  a < str.size(); a++)
+    {
+        ret = ret * 10 + ( str[a] - '0' );
+    }
+    return ret;
+}
+
 struct routingTableRow
 {
     //string owner;
@@ -65,6 +104,20 @@ struct routingTableRow
         this->destination = destination;
         this->nextHop = nextHop;
         this->dis = dis;
+    }
+    routingTableRow(string str)
+    {
+        cout << "in routingTableRow" << endl;
+        cout << "str = " << str << endl;
+        vector<char> delimVec;
+        delimVec.push_back( ' ' );
+        vector<string> vecStr = myStrTokenizer(str, delimVec );
+        this->destination = vecStr[0];
+        this->nextHop = vecStr[1];
+        cout << "destination and nextHop assigned " << endl;
+        cout << "vecStr[2] = " << vecStr[2] << endl;
+        this->dis = strToLL( vecStr[2] );
+        cout << "dis assigned " << endl;
     }
     string toStr(  )
     {
@@ -80,7 +133,26 @@ struct routingTable
     string owner;
     map< string, routingTableRow > table;
     routingTable(){}
-
+    routingTable(string routingTableInStr)
+    {
+        long long a, b, c, d, e;
+        vector<char> delimVec;
+        delimVec.push_back( '\n' );
+        vector<string> tokens = myStrTokenizer(routingTableInStr, delimVec);
+        cout << "tokens in routing table construction " << endl;
+        for ( long long a = 0; a < tokens.size(); a++ )
+        {
+            cout << tokens[a] << endl;
+        }
+        owner = tokens[0];
+        for (a = 1; a < tokens.size(); a++)
+        {
+            cout << "a = " << a << endl;
+            routingTableRow rtr = routingTableRow( tokens[a] );
+            cout << "row constructed " << endl;
+            table[ rtr.destination ] = rtr;
+        }
+    }
     void initRoutingTable(string owner, set<string> allNodes, map<string, int> neighborDist)
     {
         this->owner = owner;
@@ -101,7 +173,7 @@ struct routingTable
         }
     }
 
-    string toString()
+    string toStr()
     {
         string ret = owner + "\n" ;
         map<string, routingTableRow>::iterator it;
@@ -162,6 +234,16 @@ routingTable myRoutingTable;
 string myNode;
 char buffer[SIZE];
 
+void loadStrInCharAr(string str, char *charAr)
+{
+    long long a, b, c, d, e;
+    for ( a = 0; a < str.size(); a++ )
+    {
+        *(charAr+a) = str[a];
+    }
+    *(charAr+a) = '\0';
+}
+
 long long sendStrTo(string ipAddress, string str)
 {
     long long a, b, c, d, e, f, ret;
@@ -169,7 +251,14 @@ long long sendStrTo(string ipAddress, string str)
     sendToAddr.sin_family = AF_INET;
     sendToAddr.sin_port = htons(4747);
     inet_pton(AF_INET, ipAddress.c_str(), &sendToAddr.sin_addr.s_addr);
-    ret = sendto(sockFd, str.c_str(), 1024, 0, (struct sockaddr*) &sendToAddr, sizeof(sockaddr_in));
+    char buffer[SIZE];
+    memset(buffer, 0, sizeof(buffer) );
+    loadStrInCharAr(str, buffer);
+//    cout << "in sendStrTo" << endl;
+//    cout << "ipAddress = " << ipAddress << endl;
+//    cout << "buffer = " << endl;
+//    cout << buffer ;
+    ret = sendto(sockFd, buffer, SIZE, 0, (struct sockaddr*) &sendToAddr, sizeof(sockaddr_in));
     return ret;
 }
 
@@ -180,8 +269,12 @@ long long sendRoutingTableToAllNeighbor()
     map<string, int>::iterator mapStringToIntIt;
     for (mapStringToIntIt = neighborDist.begin(); mapStringToIntIt != neighborDist.end(); mapStringToIntIt++)
     {
-        neighborAddr.sin_family = AF_INET;
-        neighborAddr.sin_port = htons(4747);
+//        neighborAddr.sin_family = AF_INET;
+//        neighborAddr.sin_port = htons(4747);
+//        inet_pton(AF_INET, mapStringToIntIt->first, &server_address.sin_addr.s_addr);
+//        cout << "mapStringToIntIt->first = " << mapStringToIntIt->first << endl;
+//        cout << "myRoutingTable.toStr() = " << myRoutingTable.toStr() << endl;
+        sendStrTo( mapStringToIntIt->first, myRoutingTable.toStr() );
     }
 }
 
@@ -225,7 +318,12 @@ int main(int argc, char *argv[])
 
     myRoutingTable.initRoutingTable( myNode, allNodes, neighborDist );
 
-    cout << myRoutingTable.toString() << endl;
+    string myRoutingTableString = myRoutingTable.toStr();
+    cout << myRoutingTableString << endl;
+    routingTable copyRT = routingTable( myRoutingTableString );
+    cout << "copy of routing table assigned " << endl;
+    cout << copyRT.toStr() << endl;
+    cout << "copy printed" << endl;
 
     sockFd = socket(AF_INET, SOCK_DGRAM, 0);
 
@@ -247,12 +345,14 @@ int main(int argc, char *argv[])
     socklen_t addrLen = sizeof( recvFromAddr );
     while(1)
     {
+        memset(buffer, 0, sizeof(buffer) );
         numBytesReceived = recvfrom(sockFd, buffer, 1024, 0, (struct sockaddr*) &recvFromAddr, &addrLen);
         cout << buffer << endl;
         if ( ifMatchUpTo(buffer, "clk", 3) )
         {
-            cout << "clock came" << endl;
+            //cout << "clock came" << endl;
             clockCnt++;
+            sendRoutingTableToAllNeighbor();
         }
         else if ( ifMatchUpTo(buffer, "cost", 4) )
         {
@@ -264,7 +364,7 @@ int main(int argc, char *argv[])
             {
                 swap(ip1, ip2);
             }
-            cout << ip1 << " " << ip2 << " " << newCost <<  endl;
+            //cout << ip1 << " " << ip2 << " " << newCost <<  endl;
         }
         else if ( ifMatchUpTo(buffer, "send", 4) )
         {
@@ -273,7 +373,7 @@ int main(int argc, char *argv[])
         else if ( ifMatchUpTo(buffer, "show", 4) )
         {
             cout << "show came " << endl;
-            cout << myRoutingTable.toString() << endl;
+            cout << myRoutingTable.toStr() << endl;
         }
         else if ( ifMatchUpTo(buffer, "frwd", 4) )
         {
@@ -282,6 +382,8 @@ int main(int argc, char *argv[])
         else
         {
             cout << "routing table came " << endl;
+            routingTable receivedRoutingTable = routingTable(buffer);
+            cout << receivedRoutingTable.toStr() << endl;
         }
     }
 
