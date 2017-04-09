@@ -22,7 +22,7 @@ int main(){
 
 	server_address.sin_family = AF_INET;
 	server_address.sin_port = htons(4747);
-	inet_pton(AF_INET,"192.168.10.100", &server_address.sin_addr);
+	inet_pton(AF_INET,"192.168.10.100", &server_address.sin_addr.s_addr);
 
 	sockfd = socket(AF_INET, SOCK_DGRAM, 0);
 

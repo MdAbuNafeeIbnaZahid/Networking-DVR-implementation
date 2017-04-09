@@ -17,16 +17,83 @@
 
 using namespace std;
 
-struct routingTableEntry
+string LLToStr(long long num )
+{
+    string ret;
+    long long dig;
+    while( num )
+    {
+        dig = num%10;
+        ret.push_back( '0' + dig );
+        num /= 10;
+    }
+    reverse( ret.begin(), ret.end() );
+    return ret;
+}
+
+struct routingTableRow
 {
     //string owner;
     string destination;
     string nextHop;
     int dis;
+    routingTableRow(){}
+    routingTableRow(string destination, string nextHop, int dis)
+    {
+        this->destination = destination;
+        this->nextHop = nextHop;
+        this->dis = dis;
+    }
+    string toStr(  )
+    {
+        string disStr = LLToStr( dis );
+        string ret = destination;
+        ret = ret + " " + nextHop + " " + disStr;;
+        return ret;
+    }
+};
+
+struct routingTable
+{
+    string owner;
+    map< string, routingTableRow > table;
+    routingTable(){}
+
+    void initRoutingTable(string owner, set<string> allNodes, map<string, int> neighborDist)
+    {
+        this->owner = owner;
+        set<string>::iterator setStrIt;
+        map<string, int>::iterator mapStrToIntIt;
+        for ( setStrIt = allNodes.begin(); setStrIt != allNodes.end(); setStrIt++ )
+        {
+            if ( *setStrIt == owner )
+            {
+                continue;
+            }
+            table[ *setStrIt ] = routingTableRow(*setStrIt, "NONE", INT_MAX);
+        }
+        for ( mapStrToIntIt = neighborDist.begin(); mapStrToIntIt != neighborDist.end(); mapStrToIntIt++ )
+        {
+            table[ mapStrToIntIt->first ].nextHop = mapStrToIntIt->first;
+            table[ mapStrToIntIt->first ].dis = mapStrToIntIt->second;
+        }
+    }
+
+    string toString()
+    {
+        string ret = owner + "\n" ;
+        map<string, routingTableRow>::iterator it;
+        for ( it = table.begin(); it != table.end(); it++ )
+        {
+            ret = ret + (it->second).toStr() + "\n";
+        }
+        return ret;
+    }
 };
 
 set<string> allNodes;
 map<string, int> neighborDist;
+map<string, int> neighborLastClock;
 
 void printSetStr( set<string>  setStr )
 {
@@ -51,13 +118,17 @@ void printMapStrToInt(map<string, int> mapStrToInt)
     cout << endl;
 }
 
+int clockCnt;
+routingTable myRoutingTable;
+string myNode;
+
 int main(int argc, char *argv[])
 {
     long long a, b, c, d,e, f;
     int sockFd, bindFlag, numBytesReceived;
     struct sockaddr_in myAddr, sendToAddr, recvFromAddr;
     string node1, node2;
-    string myNode;
+
     cout << "argc = " << argc << endl;
     if ( argc < 3 )
     {
@@ -81,11 +152,19 @@ int main(int argc, char *argv[])
         if ( node1 == myNode )
         {
             neighborDist[ node2 ] = dist;
+            neighborLastClock[ node2 ] = clockCnt;
         }
     }
 
+
+
     printSetStr( allNodes );
     printMapStrToInt( neighborDist );
+
+    myRoutingTable.initRoutingTable( myNode, allNodes, neighborDist );
+
+    cout << myRoutingTable.toString() << endl;
+
     sockFd = socket(AF_INET, SOCK_DGRAM, 0);
 
     myAddr.sin_family = AF_INET;

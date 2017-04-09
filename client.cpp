@@ -30,12 +30,12 @@ int main(int argc, char *argv[]){
 	server_address.sin_family = AF_INET;
 	server_address.sin_port = htons(4747);
 	//server_address.sin_addr.s_addr = inet_addr("192.168.10.100");
-	inet_pton(AF_INET,"192.168.10.100",&server_address.sin_addr);
+	inet_pton(AF_INET,"192.168.10.100",&server_address.sin_addr.s_addr);
 
 	client_address.sin_family = AF_INET;
 	client_address.sin_port = htons(4747);
 	//client_address.sin_addr.s_addr = inet_addr(argv[1]);
-	inet_pton(AF_INET,argv[1],&client_address.sin_addr);
+	inet_pton(AF_INET,argv[1],&client_address.sin_addr.s_addr);
 
 	sockfd = socket(AF_INET, SOCK_DGRAM, 0);
 	bind_flag = bind(sockfd, (struct sockaddr*) &client_address, sizeof(sockaddr_in));
