@@ -14,8 +14,30 @@
 #include <sys/socket.h>
 #include <unistd.h>
 
+#define SIZE 1024
+
 
 using namespace std;
+
+long long twoByteNum(char *str)
+{
+    long long a, b, c, e, d, ret = 0;
+    ret =  ( ( unsigned char ) str[1] << 8 ) | ( (unsigned char) str[0] );
+    return ret;
+}
+
+long long ifMatchUpTo(const char *str1, const char *str2, long long upTo)
+{
+    long long a, b, c, d, ret = 1;
+    for (a = 0; a < upTo; a++)
+    {
+        if ( str1[a] != str2[a] )
+        {
+            ret = 0;
+        }
+    }
+    return ret;
+}
 
 string LLToStr(long long num )
 {
@@ -91,9 +113,26 @@ struct routingTable
     }
 };
 
+int sockFd, bindFlag, numBytesReceived;
+struct sockaddr_in myAddr, sendToAddr, recvFromAddr;
 set<string> allNodes;
 map<string, int> neighborDist;
 map<string, int> neighborLastClock;
+
+string getIPV4(char *str)
+{
+    long long a, b, c, d, e;
+    string ret;
+    for ( a = 0; a < 4; a++ )
+    {
+        ret = ret + LLToStr( (unsigned char) ( *( str+a ) ) );
+        if ( a < 3 )
+        {
+            ret = ret + ".";
+        }
+    }
+    return ret;
+}
 
 void printSetStr( set<string>  setStr )
 {
@@ -121,13 +160,36 @@ void printMapStrToInt(map<string, int> mapStrToInt)
 int clockCnt;
 routingTable myRoutingTable;
 string myNode;
+char buffer[SIZE];
+
+long long sendStrTo(string ipAddress, string str)
+{
+    long long a, b, c, d, e, f, ret;
+    struct sockaddr_in sendToAddr;
+    sendToAddr.sin_family = AF_INET;
+    sendToAddr.sin_port = htons(4747);
+    inet_pton(AF_INET, ipAddress.c_str(), &sendToAddr.sin_addr.s_addr);
+    ret = sendto(sockFd, str.c_str(), 1024, 0, (struct sockaddr*) &sendToAddr, sizeof(sockaddr_in));
+    return ret;
+}
+
+long long sendRoutingTableToAllNeighbor()
+{
+    long long a, b, c, d, e;
+    struct sockaddr_in neighborAddr;
+    map<string, int>::iterator mapStringToIntIt;
+    for (mapStringToIntIt = neighborDist.begin(); mapStringToIntIt != neighborDist.end(); mapStringToIntIt++)
+    {
+        neighborAddr.sin_family = AF_INET;
+        neighborAddr.sin_port = htons(4747);
+    }
+}
 
 int main(int argc, char *argv[])
 {
     long long a, b, c, d,e, f;
-    int sockFd, bindFlag, numBytesReceived;
-    struct sockaddr_in myAddr, sendToAddr, recvFromAddr;
-    string node1, node2;
+
+    string node1, node2, headStr;
 
     cout << "argc = " << argc << endl;
     if ( argc < 3 )
@@ -182,9 +244,45 @@ int main(int argc, char *argv[])
         cout << "unsuccessful bind" << endl << endl;
     }
 
+    socklen_t addrLen = sizeof( recvFromAddr );
     while(1)
     {
-        //numBytesReceived =
+        numBytesReceived = recvfrom(sockFd, buffer, 1024, 0, (struct sockaddr*) &recvFromAddr, &addrLen);
+        cout << buffer << endl;
+        if ( ifMatchUpTo(buffer, "clk", 3) )
+        {
+            cout << "clock came" << endl;
+            clockCnt++;
+        }
+        else if ( ifMatchUpTo(buffer, "cost", 4) )
+        {
+            cout << "cost came " << endl;
+            string ip1 = getIPV4( buffer + 4 );
+            string ip2 = getIPV4( buffer + 8 );
+            long long newCost = twoByteNum( buffer + 12 );
+            if ( ip2 == myNode )
+            {
+                swap(ip1, ip2);
+            }
+            cout << ip1 << " " << ip2 << " " << newCost <<  endl;
+        }
+        else if ( ifMatchUpTo(buffer, "send", 4) )
+        {
+            cout << "send came" << endl;
+        }
+        else if ( ifMatchUpTo(buffer, "show", 4) )
+        {
+            cout << "show came " << endl;
+            cout << myRoutingTable.toString() << endl;
+        }
+        else if ( ifMatchUpTo(buffer, "frwd", 4) )
+        {
+            cout << "frwd came " << endl;
+        }
+        else
+        {
+            cout << "routing table came " << endl;
+        }
     }
 
     return 0;
