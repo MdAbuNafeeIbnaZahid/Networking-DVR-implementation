@@ -83,8 +83,8 @@ vector<string> myStrTokenizer(string givenStr, vector<char> delimVec)
 long long strToLL(string str)
 {
     long long a, b, c, d, e, ret = 0;
-    cout << "in strToLL" << endl;
-    cout << "str = " << str << endl;
+//    cout << "in strToLL" << endl;
+//    cout << "str = " << str << endl;
     for (a = 0;  a < str.size(); a++)
     {
         ret = ret * 10 + ( str[a] - '0' );
@@ -107,17 +107,17 @@ struct routingTableRow
     }
     routingTableRow(string str)
     {
-        cout << "in routingTableRow" << endl;
-        cout << "str = " << str << endl;
+//        cout << "in routingTableRow" << endl;
+//        cout << "str = " << str << endl;
         vector<char> delimVec;
         delimVec.push_back( ' ' );
         vector<string> vecStr = myStrTokenizer(str, delimVec );
         this->destination = vecStr[0];
         this->nextHop = vecStr[1];
-        cout << "destination and nextHop assigned " << endl;
-        cout << "vecStr[2] = " << vecStr[2] << endl;
+//        cout << "destination and nextHop assigned " << endl;
+//        cout << "vecStr[2] = " << vecStr[2] << endl;
         this->dis = strToLL( vecStr[2] );
-        cout << "dis assigned " << endl;
+//        cout << "dis assigned " << endl;
     }
     string toStr(  )
     {
@@ -139,17 +139,17 @@ struct routingTable
         vector<char> delimVec;
         delimVec.push_back( '\n' );
         vector<string> tokens = myStrTokenizer(routingTableInStr, delimVec);
-        cout << "tokens in routing table construction " << endl;
-        for ( long long a = 0; a < tokens.size(); a++ )
-        {
-            cout << tokens[a] << endl;
-        }
+//        cout << "tokens in routing table construction " << endl;
+//        for ( long long a = 0; a < tokens.size(); a++ )
+//        {
+//            cout << tokens[a] << endl;
+//        }
         owner = tokens[0];
         for (a = 1; a < tokens.size(); a++)
         {
-            cout << "a = " << a << endl;
+//            cout << "a = " << a << endl;
             routingTableRow rtr = routingTableRow( tokens[a] );
-            cout << "row constructed " << endl;
+//            cout << "row constructed " << endl;
             table[ rtr.destination ] = rtr;
         }
     }
@@ -320,10 +320,11 @@ int main(int argc, char *argv[])
 
     string myRoutingTableString = myRoutingTable.toStr();
     cout << myRoutingTableString << endl;
-    routingTable copyRT = routingTable( myRoutingTableString );
-    cout << "copy of routing table assigned " << endl;
-    cout << copyRT.toStr() << endl;
-    cout << "copy printed" << endl;
+
+//    routingTable copyRT = routingTable( myRoutingTableString );
+//    cout << "copy of routing table assigned " << endl;
+//    cout << copyRT.toStr() << endl;
+//    cout << "copy printed" << endl;
 
     sockFd = socket(AF_INET, SOCK_DGRAM, 0);
 
@@ -347,7 +348,7 @@ int main(int argc, char *argv[])
     {
         memset(buffer, 0, sizeof(buffer) );
         numBytesReceived = recvfrom(sockFd, buffer, 1024, 0, (struct sockaddr*) &recvFromAddr, &addrLen);
-        cout << buffer << endl;
+        //cout << buffer << endl;
         if ( ifMatchUpTo(buffer, "clk", 3) )
         {
             //cout << "clock came" << endl;
