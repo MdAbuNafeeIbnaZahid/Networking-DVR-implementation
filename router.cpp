@@ -15,9 +15,16 @@
 #include <unistd.h>
 
 #define SIZE 1024
+#define MY_MAX 9999999
 
 
 using namespace std;
+
+int sockFd, bindFlag, numBytesReceived;
+struct sockaddr_in myAddr, sendToAddr, recvFromAddr;
+set<string> allNodes;
+map<string, int> neighborDist, isNeighborLinkDown;
+map<string, int> neighborLastClock;
 
 long long twoByteNum(char *str)
 {
@@ -164,7 +171,7 @@ struct routingTable
             {
                 continue;
             }
-            table[ *setStrIt ] = routingTableRow(*setStrIt, "NONE", INT_MAX);
+            table[ *setStrIt ] = routingTableRow(*setStrIt, "NONE", MY_MAX);
         }
         for ( mapStrToIntIt = neighborDist.begin(); mapStrToIntIt != neighborDist.end(); mapStrToIntIt++ )
         {
@@ -172,6 +179,25 @@ struct routingTable
             table[ mapStrToIntIt->first ].dis = mapStrToIntIt->second;
         }
     }
+
+    void handleCostChange(string neighborIp, long long newCost)
+    {
+        long long a, b, c, d, e, f;
+        if ( ! isNeighborLinkDown[ neighborIp ] )
+        {
+            map<string, routingTableRow>::iterator it;
+            for ( it = table.begin(); it != table.end(); it++ )
+            {
+                if ( table[ it->first ].nextHop == neighborIp )
+                {
+                    table[ it->first ].dis += (newCost - neighborDist[neighborIp] );
+                    cout << table[ it->first ].toStr() << endl;
+                }
+            }
+        }
+        neighborDist[ neighborIp ] = newCost;
+    }
+
 
     string toStr()
     {
@@ -183,13 +209,63 @@ struct routingTable
         }
         return ret;
     }
+
+    void downALink(string downIp)
+    {
+        long long a, b, c, d, e;
+        map<string, routingTableRow>::iterator it;
+        isNeighborLinkDown[ downIp ] = 1;
+        for (it = table.begin(); it != table.end(); it++)
+        {
+            if ( it->second.nextHop == downIp )
+            {
+                table[ it->first ].nextHop = "NONE";
+                table[ it->first ].dis = MY_MAX;
+            }
+        }
+
+    }
+
+    void upALink( string upIp )
+    {
+        long long a, b, c, d, e;
+        isNeighborLinkDown[ upIp ] = 0;
+        if ( table[ upIp ].dis > neighborDist[ upIp ] )
+        {
+            table[ upIp ].dis = neighborDist[ upIp ];
+            table[ upIp ].nextHop = upIp;
+        }
+    }
+
+    void updateFromNeighborRT(routingTable neighborRT)
+    {
+        long long a, b, c, d,e;
+        map<string, routingTableRow>::iterator it1;
+        for ( it1 = table.begin(); it1 != table.end(); it1++ )
+        {
+            if ( it1->first == neighborRT.owner )
+            {
+                continue;
+            }
+            routingTableRow corrspondingRow = neighborRT.table[ it1->first ];
+            if ( it1->second.nextHop == neighborRT.owner ) // force update
+            {
+                table[ it1->first ].dis = neighborDist[ neighborRT.owner ] + corrspondingRow.dis;
+            }
+            else if ( corrspondingRow.nextHop == owner ) // split horizon
+            {
+                // ignore
+            }
+            else if ( table[ it1->first ].dis > neighborDist[neighborRT.owner] + corrspondingRow.dis ) // select minimal distance
+            {
+                table[ it1->first ].dis = neighborDist[neighborRT.owner] + corrspondingRow.dis;
+                table[ it1->first ].nextHop = neighborRT.owner;
+            }
+        }
+    }
 };
 
-int sockFd, bindFlag, numBytesReceived;
-struct sockaddr_in myAddr, sendToAddr, recvFromAddr;
-set<string> allNodes;
-map<string, int> neighborDist;
-map<string, int> neighborLastClock;
+
 
 string getIPV4(char *str)
 {
@@ -278,6 +354,11 @@ long long sendRoutingTableToAllNeighbor()
     }
 }
 
+long long isMyNeighbor(string ip)
+{
+    return ( neighborDist.find( ip ) != neighborDist.end() );
+}
+
 int main(int argc, char *argv[])
 {
     long long a, b, c, d,e, f;
@@ -308,13 +389,14 @@ int main(int argc, char *argv[])
         {
             neighborDist[ node2 ] = dist;
             neighborLastClock[ node2 ] = clockCnt;
+            isNeighborLinkDown[ node2 ] = 0;
         }
     }
 
 
-
-    printSetStr( allNodes );
-    printMapStrToInt( neighborDist );
+//
+//    printSetStr( allNodes );
+//    printMapStrToInt( neighborDist );
 
     myRoutingTable.initRoutingTable( myNode, allNodes, neighborDist );
 
@@ -354,10 +436,23 @@ int main(int argc, char *argv[])
             //cout << "clock came" << endl;
             clockCnt++;
             sendRoutingTableToAllNeighbor();
+            map<string, int>::iterator it;
+            for ( it = isNeighborLinkDown.begin(); it != isNeighborLinkDown.end(); it ++ )
+            {
+                string currentNeighbor = it->first;
+                if ( neighborLastClock[ currentNeighbor ] + 3 < clockCnt )
+                {
+                    //isNeighborLinkDown[ currentNeighbor ] = 1;
+                    if ( !isNeighborLinkDown[ currentNeighbor ] )
+                    {
+                        myRoutingTable.downALink( currentNeighbor );
+                    }
+                }
+            }
         }
         else if ( ifMatchUpTo(buffer, "cost", 4) )
         {
-            cout << "cost came " << endl;
+            //cout << "cost came " << endl;
             string ip1 = getIPV4( buffer + 4 );
             string ip2 = getIPV4( buffer + 8 );
             long long newCost = twoByteNum( buffer + 12 );
@@ -365,6 +460,7 @@ int main(int argc, char *argv[])
             {
                 swap(ip1, ip2);
             }
+            myRoutingTable.handleCostChange( ip2, newCost );
             //cout << ip1 << " " << ip2 << " " << newCost <<  endl;
         }
         else if ( ifMatchUpTo(buffer, "send", 4) )
@@ -373,7 +469,7 @@ int main(int argc, char *argv[])
         }
         else if ( ifMatchUpTo(buffer, "show", 4) )
         {
-            cout << "show came " << endl;
+            //cout << "show came " << endl;
             cout << myRoutingTable.toStr() << endl;
         }
         else if ( ifMatchUpTo(buffer, "frwd", 4) )
@@ -382,9 +478,16 @@ int main(int argc, char *argv[])
         }
         else
         {
-            cout << "routing table came " << endl;
+            //cout << "routing table came " << endl;
             routingTable receivedRoutingTable = routingTable(buffer);
-            cout << receivedRoutingTable.toStr() << endl;
+            //cout << receivedRoutingTable.toStr() << endl;
+            //cout << " from " << receivedRoutingTable.owner << endl;
+            neighborLastClock[ receivedRoutingTable.owner ] = clockCnt;
+            if ( isNeighborLinkDown[ receivedRoutingTable.owner ] )
+            {
+                myRoutingTable.upALink( receivedRoutingTable.owner );
+            }
+            myRoutingTable.updateFromNeighborRT( receivedRoutingTable );
         }
     }
 
