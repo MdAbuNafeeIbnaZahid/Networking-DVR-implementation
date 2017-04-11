@@ -50,6 +50,10 @@ string LLToStr(long long num )
 {
     string ret;
     long long dig;
+    if (num == 0)
+    {
+        return "0";
+    }
     while( num )
     {
         dig = num%10;
@@ -167,17 +171,26 @@ struct routingTable
         map<string, int>::iterator mapStrToIntIt;
         for ( setStrIt = allNodes.begin(); setStrIt != allNodes.end(); setStrIt++ )
         {
-            if ( *setStrIt == owner )
-            {
-                continue;
-            }
+            // Now owner will be in routing table entry also
+//            if ( *setStrIt == owner )
+//            {
+//                continue;
+//            }
             table[ *setStrIt ] = routingTableRow(*setStrIt, "NONE", MY_MAX);
         }
+        table[ owner ].nextHop = owner;
+        table[ owner ].dis = 0;
         for ( mapStrToIntIt = neighborDist.begin(); mapStrToIntIt != neighborDist.end(); mapStrToIntIt++ )
         {
             table[ mapStrToIntIt->first ].nextHop = mapStrToIntIt->first;
             table[ mapStrToIntIt->first ].dis = mapStrToIntIt->second;
         }
+        cout << "table.size() = " << table.size() << endl;
+    }
+
+    string getNextHopeForADestination(string destinationIpAddress)
+    {
+        return table[ destinationIpAddress ].nextHop;
     }
 
     void handleCostChange(string neighborIp, long long newCost)
@@ -243,10 +256,10 @@ struct routingTable
         map<string, routingTableRow>::iterator it1;
         for ( it1 = table.begin(); it1 != table.end(); it1++ )
         {
-            if ( it1->first == neighborRT.owner )
-            {
-                continue;
-            }
+//            if ( it1->first == neighborRT.owner )
+//            {
+//                continue;
+//            }
             routingTableRow corrspondingRow = neighborRT.table[ it1->first ];
             if ( it1->second.nextHop == neighborRT.owner ) // force update
             {
@@ -324,12 +337,38 @@ long long sendStrTo(string ipAddress, string str)
 {
     long long a, b, c, d, e, f, ret;
     struct sockaddr_in sendToAddr;
+    if ( ipAddress == "NONE" )
+    {
+        return -1;
+    }
     sendToAddr.sin_family = AF_INET;
     sendToAddr.sin_port = htons(4747);
     inet_pton(AF_INET, ipAddress.c_str(), &sendToAddr.sin_addr.s_addr);
     char buffer[SIZE];
     memset(buffer, 0, sizeof(buffer) );
     loadStrInCharAr(str, buffer);
+//    cout << "in sendStrTo" << endl;
+//    cout << "ipAddress = " << ipAddress << endl;
+//    cout << "buffer = " << endl;
+//    cout << buffer ;
+    ret = sendto(sockFd, buffer, SIZE, 0, (struct sockaddr*) &sendToAddr, sizeof(sockaddr_in));
+    return ret;
+}
+
+long long sendCharArrayTo(string ipAddress, char *buffer)
+{
+    long long a, b, c, d, e, f, ret;
+    struct sockaddr_in sendToAddr;
+    if ( ipAddress == "NONE" )
+    {
+        return -1;
+    }
+    sendToAddr.sin_family = AF_INET;
+    sendToAddr.sin_port = htons(4747);
+    inet_pton(AF_INET, ipAddress.c_str(), &sendToAddr.sin_addr.s_addr);
+//    char buffer[SIZE];
+//    memset(buffer, 0, sizeof(buffer) );
+//    loadStrInCharAr(str, buffer);
 //    cout << "in sendStrTo" << endl;
 //    cout << "ipAddress = " << ipAddress << endl;
 //    cout << "buffer = " << endl;
@@ -357,6 +396,18 @@ long long sendRoutingTableToAllNeighbor()
 long long isMyNeighbor(string ip)
 {
     return ( neighborDist.find( ip ) != neighborDist.end() );
+}
+
+string stripFrwdMessage(string frwdMessage)
+{
+    long long a, b, c, d, e, f, spaceCnt = 0;
+    string ret = frwdMessage;
+    for ( a = 0; spaceCnt < 3 ; a++ )
+    {
+        spaceCnt += (frwdMessage[a] == ' ');
+    }
+    ret.erase(ret.begin(), ret.begin()+a);
+    return ret;
 }
 
 int main(int argc, char *argv[])
@@ -431,11 +482,13 @@ int main(int argc, char *argv[])
         memset(buffer, 0, sizeof(buffer) );
         numBytesReceived = recvfrom(sockFd, buffer, 1024, 0, (struct sockaddr*) &recvFromAddr, &addrLen);
         //cout << buffer << endl;
+        //cout << "buffer = " << buffer << endl;
         if ( ifMatchUpTo(buffer, "clk", 3) )
         {
             //cout << "clock came" << endl;
             clockCnt++;
             sendRoutingTableToAllNeighbor();
+            //cout << "sent routing table to all neighbor " << endl;
             map<string, int>::iterator it;
             for ( it = isNeighborLinkDown.begin(); it != isNeighborLinkDown.end(); it ++ )
             {
@@ -465,7 +518,15 @@ int main(int argc, char *argv[])
         }
         else if ( ifMatchUpTo(buffer, "send", 4) )
         {
-            cout << "send came" << endl;
+            //cout << "send came" << endl;
+            string ip1 = getIPV4( buffer + 4 );
+            string ip2 = getIPV4( buffer + 8 );
+            long long messageLength = twoByteNum( buffer + 12 );
+            string message = buffer+14;
+            string nextHop = myRoutingTable.getNextHopeForADestination( ip2 );
+            string instructionToSend = "frwd " + ip2 + " " + LLToStr(messageLength) + " " + message;
+            sendStrTo(nextHop, instructionToSend);
+            cout << message + " packet forwarded to " + nextHop << endl;
         }
         else if ( ifMatchUpTo(buffer, "show", 4) )
         {
@@ -474,7 +535,22 @@ int main(int argc, char *argv[])
         }
         else if ( ifMatchUpTo(buffer, "frwd", 4) )
         {
-            cout << "frwd came " << endl;
+            //cout << "frwd came " << endl;
+            string receivedFrwdMessage = buffer;
+            vector<char> delimVec;
+            delimVec.push_back(' ');
+            vector<string> tokens = myStrTokenizer(receivedFrwdMessage, delimVec);
+            string messageToPrint = stripFrwdMessage(receivedFrwdMessage);
+            if ( tokens[1] == myNode )
+            {
+                cout << messageToPrint << " reached destination" << endl;
+            }
+            else
+            {
+                string nextHop = myRoutingTable.getNextHopeForADestination( tokens[1] );
+                cout << messageToPrint + " packet forwarded to " + nextHop << endl;
+                sendStrTo(nextHop, receivedFrwdMessage);
+            }
         }
         else
         {
